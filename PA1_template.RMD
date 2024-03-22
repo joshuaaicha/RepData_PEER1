@@ -1,0 +1,105 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+activity <- read.csv("activity.csv")
+activity$date <- as.Date(activity$date)
+
+library(dplyr)
+#Calculate steps per day
+stepsPerDay <- activity %>%
+  group_by(date) %>%
+  summarize(sumsteps = sum(steps, na.rm = TRUE))
+#Plot
+hist(stepsPerDay$sumsteps, main = "Histogram of Daily Steps", 
+     col="cyan", xlab="Steps", ylim = c(0,30))
+dev.copy(png,"hist.png", width = 450, height = 450)
+dev.off()
+#Mean and median
+meanPreNA <- round(mean(stepsPerDay$sumsteps))
+medianPreNA <- round(median(stepsPerDay$sumsteps))
+
+print(paste("The mean is: ", meanPreNA))
+print(paste("The median is : ", medianPreNA))
+
+#Time series plot
+stepsPerInterval <- activity %>%
+  group_by(interval) %>%
+  summarize(meansteps = mean(steps, na.rm = TRUE))
+
+plot(stepsPerInterval$meansteps ~ stepsPerInterval$interval,
+     col="orange", type="l", xlab = "5 Minute Intervals", ylab = "Average Number of Steps",
+     main = "Steps By Time Interval")
+dev.copy(png, "time.png", width = 450, height = 450)
+dev.off()
+
+#Average daily activity pattern
+print(paste("5-Minute Interval containing the most steps on average: ",stepsPerInterval$interval[which.max(stepsPerInterval$meansteps)]))
+
+print(paste("Average steps for that interval: ",round(max(stepsPerInterval$meansteps))))
+
+#return missing values
+print(paste("The total number of rows with NA is: ",sum(is.na(activity$steps))))
+
+activityNoNA <- activity  
+for (i in 1:nrow(activity)){
+  if(is.na(activity$steps[i])){
+    activityNoNA$steps[i]<- stepsPerInterval$meansteps[activityNoNA$interval[i] == stepsPerInterval$interval]
+  }
+}
+
+#Plot
+stepsPerDay <- activityNoNA %>%
+  group_by(date) %>%
+  summarize(sumsteps = sum(steps, na.rm = TRUE)) 
+
+hist(stepsPerDay$sumsteps, main = "Histogram of Daily Steps", 
+     col="cyan", xlab="Steps")
+dev.copy(png, "hist2.png", width =450, height = 450)
+dev.off()
+#Mean and median
+meanAfterNA <- round(mean(stepsPerDay$sumsteps), digits = 2)
+medianAfterNA <- round(median(stepsPerDay$sumsteps), digits = 2)
+
+print(paste("The mean is: ", mean(meanAfterNA)))
+print(paste("The median is:", median(medianAfterNA)))
+
+#Comparison of mean and median
+NACompare <- data.frame(mean = c(meanPreNA,meanAfterNA),median = c(medianPreNA,medianAfterNA))
+rownames(NACompare) <- c("Pre NA Transformation", "Post NA Transformation")
+print(NACompare)
+
+#declare new variables
+activityDoW <- activityNoNA
+activityDoW$date <- as.Date(activityDoW$date)
+activityDoW$day <- ifelse(weekdays(activityDoW$date) %in% c("Saturday", "Sunday"), "weekend", "weekday")
+activityDoW$day <- as.factor(activityDoW$day)
+
+#Time panel plot
+activityWeekday <- filter(activityDoW, activityDoW$day == "weekday")
+activityWeekend <- filter(activityDoW, activityDoW$day == "weekend")
+
+activityWeekday <- activityWeekday %>%
+  group_by(interval) %>%
+  summarize(steps = mean(steps)) 
+activityWeekday$day <- "weekday"
+
+activityWeekend <- activityWeekend %>%
+  group_by(interval) %>%
+  summarize(steps = mean(steps)) 
+activityWeekend$day <- "weekend"
+
+wkdayWkend <- rbind(activityWeekday, activityWeekend)
+wkdayWkend$day <- as.factor(wkdayWkend$day)
+#Load dependency
+library(ggplot2)
+
+g <- ggplot (wkdayWkend, aes (interval, steps))
+g + geom_line() + facet_grid (day~.) + 
+  theme(axis.text = element_text(size = 12),axis.title = element_text(size = 14)) + 
+  labs(y = "Number of Steps") + labs(x = "Interval") + 
+  ggtitle("Average Number of Steps: Weekday vs. Weekend") + 
+  theme(plot.title = element_text(hjust = 0.5))
+dev.copy(png,"timepanel.png", width = 450, height = 450)
+dev.off()
